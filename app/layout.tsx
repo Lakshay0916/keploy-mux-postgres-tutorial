@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
-import { Toc } from "@/components/Toc";
+import { MobileToc, Toc } from "@/components/Toc";
 import { site } from "@/lib/site";
 import "./globals.css";
 
@@ -48,8 +48,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </a>
           <Header />
           <div className="mx-auto flex max-w-6xl gap-10 px-4 sm:px-6">
-            <main id="content" className="min-w-0 flex-1 py-10 lg:py-14">
-              <article id="top" className="prose mx-auto max-w-3xl dark:prose-invert">
+            <main id="content" className="min-w-0 flex-1 pb-10 lg:py-14">
+              <MobileToc />
+              <article id="top" className="prose mx-auto max-w-3xl pt-8 dark:prose-invert lg:pt-0">
                 {children}
               </article>
             </main>

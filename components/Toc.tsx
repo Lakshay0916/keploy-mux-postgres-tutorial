@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 type Heading = { id: string; text: string; level: number };
 
-export function Toc() {
+function useHeadings() {
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [activeId, setActiveId] = useState("");
 
@@ -38,6 +39,36 @@ export function Toc() {
     };
   }, []);
 
+  return { headings, activeId };
+}
+
+function TocLinks({ headings, activeId, onNavigate }: { headings: Heading[]; activeId: string; onNavigate?: () => void }) {
+  return (
+    <ul className="space-y-1 border-l border-border">
+      {headings.map((heading) => {
+        const active = heading.id === activeId;
+        return (
+          <li key={heading.id}>
+            <a
+              href={`#${heading.id}`}
+              onClick={onNavigate}
+              aria-current={active ? "location" : undefined}
+              className={`-ml-px block border-l py-1 leading-snug transition-colors ${
+                heading.level === 3 ? "pl-6" : "pl-3"
+              } ${active ? "border-brand font-medium text-brand-fg" : "border-transparent text-muted hover:text-fg"}`}
+            >
+              {heading.text}
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Sticky sidebar for large screens. */
+export function Toc() {
+  const { headings, activeId } = useHeadings();
   if (!headings.length) return null;
 
   return (
@@ -45,24 +76,36 @@ export function Toc() {
       <p id="toc-heading" className="mb-3 font-semibold text-fg">
         On this page
       </p>
-      <ul className="space-y-1 border-l border-border">
-        {headings.map((heading) => {
-          const active = heading.id === activeId;
-          return (
-            <li key={heading.id}>
-              <a
-                href={`#${heading.id}`}
-                aria-current={active ? "location" : undefined}
-                className={`-ml-px block border-l py-1 leading-snug transition-colors ${
-                  heading.level === 3 ? "pl-6" : "pl-3"
-                } ${active ? "border-brand font-medium text-brand-fg" : "border-transparent text-muted hover:text-fg"}`}
-              >
-                {heading.text}
-              </a>
-            </li>
-          );
-        })}
-      </ul>
+      <TocLinks headings={headings} activeId={activeId} />
+    </nav>
+  );
+}
+
+/** Collapsible bar under the header on small screens; shows the current section. */
+export function MobileToc() {
+  const { headings, activeId } = useHeadings();
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  // Rendered even before headings load, so the bar doesn't push the article down (layout shift).
+  const current = headings.find((heading) => heading.id === activeId)?.text;
+
+  return (
+    <nav aria-label="On this page" className="sticky top-14 z-30 -mx-4 border-b border-border bg-bg/90 backdrop-blur sm:-mx-6 lg:hidden">
+      <details ref={detailsRef} className="group">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-sm sm:px-6 [&::-webkit-details-marker]:hidden">
+          <span className="min-w-0 truncate">
+            <span className="font-semibold text-fg">On this page</span>
+            {current && <span className="text-muted"> · {current}</span>}
+          </span>
+          <ChevronDown className="size-4 shrink-0 text-muted transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
+        <div className="max-h-[60vh] overflow-y-auto px-4 pb-4 text-sm sm:px-6">
+          <TocLinks
+            headings={headings}
+            activeId={activeId}
+            onNavigate={() => detailsRef.current?.removeAttribute("open")}
+          />
+        </div>
+      </details>
     </nav>
   );
 }

@@ -10,9 +10,9 @@
   --border: #e4e4e7;
   --surface: #fafafa;
   --code-bg: #f6f8fa;
-  /* Keploy-like orange. The darker shade keeps link text above 4.5:1 on white. */
+  /* Keploy-like orange. The darker shade keeps text above 4.5:1 on white and orange tints. */
   --brand: #f5904d;
-  --brand-fg: #b4531a;
+  --brand-fg: #a84a12;
 }
 
 .dark {
@@ -77,8 +77,15 @@ body {
   text-decoration-color: currentColor;
 }
 
+/* Clear the sticky header, plus the "On this page" bar below lg. */
 .prose :is(h2, h3) {
-  scroll-margin-top: 5rem;
+  scroll-margin-top: 7rem;
+}
+
+@media (width >= 64rem) {
+  .prose :is(h2, h3) {
+    scroll-margin-top: 5rem;
+  }
 }
 
 .prose h2 {
@@ -184,4 +191,9 @@ pre [data-highlighted-line] {
 
 .prose td:first-child code {
   white-space: nowrap;
+}
+
+/* github-light-default renders comments in #6E7781 (4.3:1 on our code background); darken to pass WCAG AA. */
+pre code span[style*="--shiki-light:#6E7781"] {
+  --shiki-light: #57606a !important;
 }
