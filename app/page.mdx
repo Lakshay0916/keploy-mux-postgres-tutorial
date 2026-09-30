@@ -1,0 +1,455 @@
+# Test your Go + Postgres API without writing a single test or mock by hand
+
+I took Keploy's Gorilla Mux + Postgres sample, clicked around the API for a minute, and walked away with a replayable test suite, database mocks included. This page is the guide I wish I'd had: every command I ran, what each one is actually doing, and the snags I hit along the way.
+
+<Callout type="info" title="TL;DR">
+
+- **What you'll do:** record real HTTP traffic from a small Go API with Keploy, then replay it as tests, with Postgres mocked automatically.
+- **You need:** Docker with Docker Compose, Linux, macOS or Windows (WSL), and the Keploy CLI. Go itself is only needed if you run the app natively.
+- **Time:** one sitting. The first run is the slowest because Docker builds the Go image and pulls Keploy's agent image.
+
+</Callout>
+
+{/* TODO(me): add one or two sentences on why I picked this quickstart / what I expected going in. */}
+
+## What is Keploy, and why should a Go dev care?
+
+Keploy is an open-source testing tool that **turns real API traffic into tests**. While your app runs, it captures each incoming HTTP request and the response your app sent back. It *also* captures every call your app makes to its dependencies (here, the Postgres queries behind each request).
+
+When you replay, Keploy sends the recorded requests to your app again and answers the database calls itself, from the recording. So your tests don't need a live database, they're fast, and they give the same result every time.
+
+The part that surprised me most: **there is nothing to add to the Go code.** No SDK, no middleware, no interfaces to mock. Keploy uses eBPF to watch network traffic at the kernel level, so the app has no idea it's being recorded.
+
+## How it works
+
+<FlowDiagram />
+
+Two commands carry the whole workflow: `keploy record` watches while you (or your users) use the API, and `keploy test` replays what it saw and diffs the results.
+
+## Prerequisites
+
+- **Docker + Docker Compose**, running. Keploy starts the app through Compose and runs its own agent in a container.
+- **Keploy CLI**, installed in the first step below.
+- **Git**, to clone the sample.
+- **Go 1.20+**, only for the native (non-Docker) route.
+
+For reference, this is exactly what I ran it on:
+
+| Tool | Version |
+| --- | --- |
+| OS | macOS 26.6 (Apple Silicon) |
+| Docker | 29.2.1 (Compose v5.0.2) |
+| Keploy | 3.8.49 (Free edition) |
+| Go | not installed (not needed for the Docker route) |
+
+## The walkthrough
+
+<Steps>
+
+### Install Keploy
+
+The official installer is a one-liner for Linux, macOS and WSL (see the [installation guide](https://keploy.io/docs/server/installation/) for Windows and other options):
+
+```bash
+curl --silent -O -L https://keploy.io/install.sh && source install.sh
+```
+
+Then confirm it's on your `PATH`:
+
+```bash
+keploy --version
+```
+
+```text
+Keploy 3.8.49
+```
+
+<Callout type="info">
+On Linux, Keploy needs kernel **5.10 or newer** for its eBPF hooks. Check yours with `uname -r`.
+</Callout>
+
+### Get the sample app
+
+```bash
+git clone https://github.com/keploy/samples-go.git && cd samples-go/mux-sql
+```
+
+It's a small product catalog API written with [Gorilla Mux](https://github.com/gorilla/mux) and backed by Postgres, listening on port `8010`. The files that matter:
+
+| File | What it does |
+| --- | --- |
+| `main.go` | Connects to Postgres and starts the server on `:8010` |
+| `app.go` | Routes and handlers: `POST /product`, `GET /products`, `GET /product/{id}`, plus update and delete |
+| `model.go` | The SQL behind each handler |
+| `docker-compose.yml` | Two services: the Go app (container `muxSqlApp`) and `postgres:10.5` |
+
+Before recording, I had to make three small changes. None of them are Keploy-specific, but each one tripped me up.
+
+**1. Point the app at the Postgres container.** In the current version of the repo, `main.go` connects to `localhost`, which is right for the native setup but wrong inside Docker, where Postgres is reachable at its service name. The comment on the next line even says so:
+
+```diff title="main.go"
+ 	err := a.Initialize(
+-		"localhost", // postgres host
++		"postgres", // postgres host
+ 		// "postgres", //Change localhost to postgres when using Docker to run keploy
+```
+
+**2. Create the Docker network.** `docker-compose.yml` expects an *external* network called `keploy-network`, and Compose won't create external networks for you:
+
+```bash
+docker network create keploy-network
+```
+
+**3. Delete the old recordings.** The repo ships with a `keploy/` folder recorded by an older Keploy version. When I replayed it with 3.8.49, all three of its tests failed because the mock format has changed since. Starting clean means your first recording lands in `test-set-0` and every file name below matches yours:
+
+```bash
+rm -rf keploy
+```
+
+<Callout type="tip">
+If you only plan to use Docker, you can skip `go mod download`. The `Dockerfile` builds the app inside a `golang` image.
+</Callout>
+
+### Record traffic
+
+Now start the app *through* Keploy:
+
+```bash
+keploy record -c "docker compose up" --container-name "muxSqlApp" --build-delay 50
+```
+
+| Flag | What it means |
+| --- | --- |
+| `-c` | The command that starts your app. Keploy runs it for you, so it can wrap it. |
+| `--container-name` | Which container to watch. It must match `container_name` in `docker-compose.yml`. |
+| `--build-delay` | Seconds to wait for images to build and containers to start before Keploy gives up on the app. |
+
+<Callout type="info" title="Why --build-delay?">
+With Compose, "the app is running" happens in stages: images build or pull, Postgres initialises, then the Go binary boots. `--build-delay` gives all of that time to finish. The first run builds the Go image from scratch, so be generous. `50` worked for me.
+</Callout>
+
+Under the hood, Keploy writes a temporary Compose file that adds its own agent container next to your services, then runs that. Once you see the app's own "Connected" log line, you're recording:
+
+```text
+🐰 Keploy: ... INFO  Starting Keploy  {"version": "3.8.49", ...}
+🐰 Keploy: ... INFO  Running application using a temporary Keploy-generated Docker Compose file (will be cleaned up automatically)
+🐰 Keploy: ... INFO  Keploy agent is ready to record test cases and mocks.
+muxSqlApp       | 2026/09/30 14:49:45 😃 Connected to 8010 port !!
+```
+
+{/* TODO(me): note anything that surprised or confused me while waiting for this step. */}
+
+### Generate traffic
+
+Leave that terminal running. In a second terminal, use the API like a client would. Every request becomes a test case.
+
+Create a product:
+
+```bash
+curl --request POST \
+  --url http://localhost:8010/product \
+  --header 'content-type: application/json' \
+  --data '{"name":"Bubbles","price": 123}'
+```
+
+```json
+{"id":1,"name":"Bubbles","price":123}
+```
+
+List all products:
+
+```bash
+curl --request GET --url http://localhost:8010/products
+```
+
+```json
+[]
+```
+
+Fetch the product by ID:
+
+```bash
+curl --request GET --url http://localhost:8010/product/1
+```
+
+```json
+{"id":1,"name":"Bubbles","price":123}
+```
+
+Back in the first terminal, Keploy logs each capture:
+
+```text
+🐰 Keploy: ... INFO  🟠 Keploy has captured test cases for the user's application.  {"path": "keploy/test-set-0/tests", "testcase name": "post-product-1"}
+🐰 Keploy: ... INFO  🟠 Keploy has captured test cases for the user's application.  {"path": "keploy/test-set-0/tests", "testcase name": "get-products-1"}
+🐰 Keploy: ... INFO  🟠 Keploy has captured test cases for the user's application.  {"path": "keploy/test-set-0/tests", "testcase name": "get-product-by-id-1"}
+```
+
+<Callout type="warning" title="Wait, why is /products empty?">
+
+The row is definitely in Postgres (`GET /product/1` finds it), and the same thing happens without Keploy in the picture. It's a classic Go gotcha in `model.go`:
+
+```go title="model.go"
+defer handleDeferError(rows.Close())
+```
+
+Arguments to a deferred call are evaluated **immediately**, so `rows.Close()` runs right there, *before* the `for rows.Next()` loop. The loop never sees a row and the handler returns an empty list. The fix is `defer func() { handleDeferError(rows.Close()) }()`.
+
+I left the bug in on purpose: Keploy records what your API *actually does*, not what the docs say it does. That's exactly what you want from a regression suite.
+
+</Callout>
+
+Press <kbd>Ctrl</kbd> + <kbd>C</kbd> to stop recording. In 3.8.x, Keploy then **automatically replays** what it just recorded to check for flaky fields. For me that finished with `Total tests: 3, Total test passed: 3`. (Pass `--disableAutoReplay` if you want to skip it.)
+
+### Look at what Keploy wrote
+
+A new `keploy/` folder appeared next to the code:
+
+```text
+keploy/
+├── .gitignore
+├── reports/
+└── test-set-0/
+    ├── config.yaml
+    ├── mappings.yaml
+    ├── mocks.yaml
+    └── tests/
+        ├── get-product-by-id-1.yaml
+        ├── get-products-1.yaml
+        └── post-product-1.yaml
+```
+
+Each file in `tests/` is one request/response pair, named after the route. Here's the POST, trimmed:
+
+```yaml title="keploy/test-set-0/tests/post-product-1.yaml" {21-23}
+kind: Http
+name: post-product-1
+spec:
+  req:
+    method: POST
+    url: http://localhost:8010/product
+    header:
+      Content-Type: application/json
+      # ...trimmed
+    body: '{"name":"Bubbles","price": 123}'
+  resp:
+    status_code: 201
+    header:
+      Content-Length: "37"
+      Content-Type: application/json
+      Date: Wed, 30 Sep 2026 14:49:52 GMT
+    body: '{"id":1,"name":"Bubbles","price":123}'
+    status_message: Created
+  # ...trimmed
+  objects: []
+  assertions:
+    noise:
+      header.Date: []
+curl: |-
+  curl --request POST \
+  # ...trimmed
+```
+
+The highlighted `noise` block is the clever bit. The `Date` header will be different on every run, so a naive comparison would fail forever. Keploy marks it as *noise*: during replay that field is ignored and everything else must match exactly. You can add your own noisy fields (timestamps, generated IDs) the same way.
+
+`mocks.yaml` holds everything the app said to Postgres and what Postgres answered. This excerpt is the `INSERT` behind the POST:
+
+```yaml title="keploy/test-set-0/mocks.yaml"
+kind: PostgresV3
+name: mock-3
+spec:
+  postgresV3:
+    type: query
+    query:
+      sqlNormalized: INSERT INTO products(name, price) VALUES($1, $2) RETURNING id
+      bindValues:
+        - !!binary QnViYmxlcw==   # "Bubbles"
+        - !!binary MTIz           # "123"
+      response:
+        rows:
+          - - 1                   # the new id
+        commandComplete: INSERT 0 1
+      # ...trimmed
+```
+
+It's the real wire-level conversation (query, parameters, result rows), captured without a single line of mocking code. The file also contains the Postgres handshake and the DNS lookup for `postgres`, so the app can boot during replay without a database at all.
+
+<Callout type="info">
+The generated `keploy/.gitignore` excludes `reports/` and every `mocks.yaml`. Keploy 3.x can upload mocks to its registry and reference them by hash in `config.yaml`. For a local tutorial like this one, you don't need to think about that.
+</Callout>
+
+### Replay as tests
+
+Now the payoff. Stop everything, then run:
+
+```bash
+keploy test -c "docker compose up" --container-name "muxSqlApp" --build-delay 50 --delay 10
+```
+
+It's the same command as before, plus `--delay`: how many seconds to wait after the app starts before firing the first test. Keploy then sends each recorded request to the app and compares the live response with the recorded one:
+
+```text
+🐰 Keploy: ... INFO  result  {"testcase id": "post-product-1", "testset id": "test-set-0", "passed": "true"}
+🐰 Keploy: ... INFO  result  {"testcase id": "get-products-1", "testset id": "test-set-0", "passed": "true"}
+🐰 Keploy: ... INFO  result  {"testcase id": "get-product-by-id-1", "testset id": "test-set-0", "passed": "true"}
+
+ <=========================================>
+  COMPLETE TESTRUN SUMMARY.
+	Total tests: 3
+	Total test passed: 3
+	Total test failed: 0
+	Total time taken: 11.11 s
+<=========================================>
+```
+
+Here's the key point: **the app's SQL never reached Postgres.** Compose still starts the Postgres container, but Keploy intercepts the app's outgoing connections and answers them from `mocks.yaml`. That's why the replay is deterministic. The `INSERT` returns `id: 1` every single time, however many times you run it, which a real database would never do.
+
+{/* TODO(me): describe my "a-ha" moment from seeing this pass. */}
+
+### Break it on purpose
+
+A test suite you've never seen fail is hard to trust. So I simulated a small refactor that looks harmless: renaming the JSON field `price` to `cost` in `model.go`.
+
+```diff title="model.go"
+ type product struct {
+ 	ID    int     `json:"id"`
+ 	Name  string  `json:"name"`
+-	Price float64 `json:"price"`
++	Price float64 `json:"cost"`
+ }
+```
+
+<Callout type="warning" title="Rebuild the image first">
+`docker compose up` reuses the existing `mux-sql-go-app` image. The first time I tried this I skipped the rebuild, and the tests happily passed against the *old* code. Rebuild before you replay:
+
+```bash
+docker compose build
+```
+</Callout>
+
+Then run the same `keploy test` command. Two of the three tests go red, and Keploy prints a side-by-side diff for each:
+
+```text
+Testrun failed for testcase with id: "post-product-1"
+
+│                    EXPECT BODY                    │                   ACTUAL BODY                     │
+│ ──────────────────────────────────────────────────┼────────────────────────────────────────────────── │
+│  {                                                │ {                                                 │
+│  "price": 123                                     │ "cost": 0                                         │
+│  id:1                                             │ id:1                                              │
+│   }                                               │  }                                                │
+
+Testrun failed for testcase with id: "get-product-by-id-1"
+
+│  "price": 123                                     │ "cost": 123                                       │
+
+  COMPLETE TESTRUN SUMMARY.
+	Total tests: 3
+	Total test passed: 1
+	Total test failed: 2
+```
+
+Look closely at the POST: `"cost": 0`, not `123`. The tag rename didn't just change the response shape. It also broke request **decoding**, because the handler still receives `"price"` and now silently drops it. One recorded request caught both the breaking API change and a quiet data-loss bug. I didn't write a single assertion for either.
+
+(`get-products-1` still passes because it returns an empty list, so there's no `price` field to compare.)
+
+Revert the change with `git checkout model.go` and rebuild when you're done.
+
+<Callout type="tip" title="Bonus experiment">
+Fix the `defer` bug from Step 4 instead, then rebuild and replay. `GET /products` now returns the product, but Keploy **passes** the test with a note: *"Additive response schema change detected. Passing testcase by default because only new response fields were added."* It tells a breaking change apart from an additive one. Once you're happy with the new behaviour, re-record to make it the new baseline.
+</Callout>
+
+</Steps>
+
+## Docker Compose or native?
+
+Everything above used Docker Compose, which works the same on macOS, Linux and WSL. On Linux or WSL you can also run the Go binary directly on the host and keep only Postgres in Docker:
+
+<Tabs items={["Docker Compose", "Native (Linux / WSL)"]}>
+<Tab value="Docker Compose">
+
+Keep `main.go` pointing at `"postgres"`, then record:
+
+```bash
+keploy record -c "docker compose up" --container-name "muxSqlApp" --build-delay 50
+```
+
+And replay:
+
+```bash
+keploy test -c "docker compose up" --container-name "muxSqlApp" --build-delay 50 --delay 10
+```
+
+Remember to `docker compose build` after every code change.
+
+</Tab>
+<Tab value="Native (Linux / WSL)">
+
+Keep `main.go` pointing at `"localhost"` (the repo default) and start only the database:
+
+```bash
+go mod download
+docker compose up postgres
+```
+
+Then, in another terminal, record:
+
+```bash
+sudo -E env PATH=$PATH keploy record -c "go run main.go app.go"
+```
+
+And replay:
+
+```bash
+sudo -E env PATH=$PATH keploy test -c "go run main.go app.go" --delay 10
+```
+
+`sudo` is needed to load the eBPF programs. `-E env PATH=$PATH` keeps your environment, so `sudo` can still find `go` and `keploy`.
+
+</Tab>
+</Tabs>
+
+## Troubleshooting
+
+These are the problems I actually ran into, plus a few that are easy to hit.
+
+<Callout type="danger" title="Bind for 0.0.0.0:5432 failed: port is already allocated">
+Another Postgres (in my case, a different project's container) already owned the port. The Go app talks to Postgres over the Docker network, so the host port mapping isn't needed for this tutorial. Stop the other database, or remove or change the `ports:` entry under `postgres` in `docker-compose.yml`.
+</Callout>
+
+<Callout type="warning" title="The old test-set-0 fails on replay">
+The recordings shipped with the repo were made with an older Keploy and use an older mock format. Delete `keploy/` before recording (Step 2), or replay only your own set with `-t test-set-1`.
+</Callout>
+
+<Callout type="warning" title="My code change made no difference">
+You're replaying the old image. Run `docker compose build` before `keploy test`.
+</Callout>
+
+<Callout type="info" title="Other things worth checking">
+
+- **Docker isn't running.** Keploy starts your app through Docker, so start Docker Desktop (or the daemon) first.
+- **Wrong `--container-name`.** It has to match `container_name` in `docker-compose.yml` (`muxSqlApp`), not the service name (`go-app`).
+- **Compose says the `keploy-network` network doesn't exist.** Run `docker network create keploy-network`.
+- **Port `8010` already in use.** Stop whatever is using it (`lsof -i :8010` shows the culprit).
+- **The app isn't up before Keploy gives up.** Increase `--build-delay` (and `--delay` for `keploy test`) on slower machines.
+
+</Callout>
+
+{/* TODO(me): add any errors I hit on my own run that aren't covered above. */}
+
+## Why this matters for Go teams
+
+- **No hand-written mocks.** No `sqlmock` expectations or repository interfaces written just for tests. The mocks come from real traffic, so they match what Postgres actually returns.
+- **Tests that reflect reality.** Real requests produce the test cases, including edge cases (like that empty list) you might not have thought to write.
+- **Fast and CI-friendly.** With dependencies mocked, the replay needs no database to set up, seed or clean. That makes it easy to run on every PR ([GitHub Actions guide](https://keploy.io/docs/ci-cd/github/)).
+- **Catches the regressions unit tests miss.** A renamed JSON tag compiles fine and passes most unit tests. Here, it failed two recorded tests within seconds.
+
+## Next steps
+
+- [Keploy documentation](https://keploy.io/docs/): concepts, CLI reference, configuration
+- [How Keploy works](https://keploy.io/docs/keploy-explained/how-keploy-works/): the eBPF details
+- [Other Go quickstarts](https://keploy.io/docs/quickstart/quickstart-filter/): Gin + Mongo, Echo + SQL and more
+- [Keploy in CI with GitHub Actions](https://keploy.io/docs/ci-cd/github/)
+- [keploy/keploy on GitHub](https://github.com/keploy/keploy): star it, read the source, file issues
+- [Keploy community Slack](https://join.slack.com/t/keploy/shared_invite/zt-3zcnuqfgl-WYK1NMhslVHsCtNcA1ULwA): where to ask when you get stuck
+
+{/* TODO(me): closing line in my own voice, e.g. what I'd try next with Keploy. */}
