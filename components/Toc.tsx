@@ -23,13 +23,16 @@ function useHeadings() {
       ),
     );
 
-    // Highlight the heading closest to the top of the viewport.
+    // Active section = the last heading above the reading line (a third of the way down).
+    // The observer only signals that a heading crossed that line; recomputing from positions
+    // keeps the highlight right when scrolling back up past the first heading.
     const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries.filter((entry) => entry.isIntersecting);
-        if (visible.length) setActiveId(visible[0].target.id);
+      () => {
+        const line = window.innerHeight / 3;
+        const passed = elements.filter((el) => el.getBoundingClientRect().top <= line);
+        setActiveId(passed.length ? passed[passed.length - 1].id : "");
       },
-      { rootMargin: "-80px 0px -70% 0px" },
+      { rootMargin: "0px 0px -66% 0px" },
     );
     elements.forEach((el) => observer.observe(el));
 
@@ -89,7 +92,7 @@ export function MobileToc() {
   const current = headings.find((heading) => heading.id === activeId)?.text;
 
   return (
-    <nav aria-label="On this page" className="sticky top-14 z-30 -mx-4 border-b border-border bg-bg/90 backdrop-blur sm:-mx-6 lg:hidden">
+    <nav aria-label="On this page" className="sticky top-14 z-30 -mx-4 border-b border-border bg-bg/85 backdrop-blur-md sm:-mx-6 lg:hidden print:hidden">
       <details ref={detailsRef} className="group">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-sm sm:px-6 [&::-webkit-details-marker]:hidden">
           <span className="min-w-0 truncate">

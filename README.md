@@ -36,15 +36,18 @@ app/
 ├── icon.svg              # favicon
 └── opengraph-image.tsx   # social preview image, generated at build time
 components/
+├── Hero.tsx              # title, badges, read time (computed at build) and CTA
 ├── Callout.tsx           # info / tip / warning / danger boxes
 ├── Steps.tsx             # numbered steps (built from ### headings)
 ├── Tabs.tsx              # accessible tabs (Docker Compose vs native)
 ├── CodeBlock.tsx         # code block header: filename or language + copy button
 ├── CopyButton.tsx
 ├── FlowDiagram.tsx       # record/replay diagram
-├── Toc.tsx               # "On this page" sidebar with active-section tracking
+├── Toc.tsx               # "On this page" sidebar (desktop) and collapsible bar (mobile)
+├── ScrollEffects.tsx     # reading progress bar, back-to-top, header border on scroll
 ├── Header.tsx, Footer.tsx, ThemeToggle.tsx, GitHubIcon.tsx
 lib/site.ts               # site title, description, repo URL
+lib/reading-time.ts       # read-time estimate from the MDX source
 mdx-components.tsx        # maps MDX elements to the components above
 next.config.mjs           # MDX + remark/rehype plugin setup
 ```

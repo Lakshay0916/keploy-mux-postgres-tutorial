@@ -1,14 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
+import { ScrollEffects } from "@/components/ScrollEffects";
 import { MobileToc, Toc } from "@/components/Toc";
 import { site } from "@/lib/site";
 import "./globals.css";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
+const jetbrainsMono = JetBrains_Mono({ variable: "--font-jetbrains-mono", subsets: ["latin"] });
 
 const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL;
 
@@ -38,24 +39,25 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <a
             href="#content"
-            className="sr-only z-50 rounded-md bg-brand px-3 py-2 text-white focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+            className="sr-only z-50 rounded-md bg-brand px-3 py-2 font-medium text-zinc-950 focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
           >
             Skip to content
           </a>
+          <ScrollEffects />
           <Header />
-          <div className="mx-auto flex max-w-6xl gap-10 px-4 sm:px-6">
-            <main id="content" className="min-w-0 flex-1 pb-10 lg:py-14">
+          <div className="mx-auto flex max-w-6xl gap-12 px-4 sm:px-6 lg:px-8">
+            <main id="content" className="min-w-0 flex-1 pb-16 lg:pt-4">
               <MobileToc />
-              <article id="top" className="prose mx-auto max-w-3xl pt-8 dark:prose-invert lg:pt-0">
+              <article id="top" className="prose mx-auto max-w-3xl dark:prose-invert">
                 {children}
               </article>
             </main>
-            <aside className="hidden w-56 shrink-0 lg:block">
-              <div className="sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto py-14">
+            <aside className="hidden w-56 shrink-0 lg:block print:hidden">
+              <div className="sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto py-12">
                 <Toc />
               </div>
             </aside>

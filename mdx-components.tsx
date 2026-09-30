@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 import { Callout } from "@/components/Callout";
 import { CodeBlock } from "@/components/CodeBlock";
 import { FlowDiagram } from "@/components/FlowDiagram";
+import { Hero } from "@/components/Hero";
 import { Steps } from "@/components/Steps";
 import { Tab, Tabs } from "@/components/Tabs";
 
@@ -14,13 +15,15 @@ const components: MDXComponents = {
     "data-rehype-pretty-code-figure" in props ? <CodeBlock {...props} /> : <figure {...props} />,
   a: ({ href = "", ...props }: ComponentProps<"a">) =>
     href.startsWith("http") ? <a href={href} target="_blank" rel="noreferrer" {...props} /> : <a href={href} {...props} />,
+  // Tables scroll inside their own box on narrow screens instead of widening the page.
   table: (props: ComponentProps<"table">) => (
-    <div className="overflow-x-auto">
+    <div className="table-wrap not-prose my-6 overflow-x-auto rounded-lg border border-border">
       <table {...props} />
     </div>
   ),
   Callout,
   FlowDiagram,
+  Hero,
   Steps,
   Tab,
   Tabs,

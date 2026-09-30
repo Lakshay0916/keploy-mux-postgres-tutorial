@@ -13,12 +13,17 @@ export function Tabs({ items, children }: { items: string[]; children: ReactNode
   const baseId = useId();
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  // Arrow keys move between tabs, per the WAI-ARIA tabs pattern.
+  // Arrow keys, Home and End move between tabs, per the WAI-ARIA tabs pattern.
   function onKeyDown(event: KeyboardEvent, index: number) {
-    const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
-    if (!step) return;
+    const targets: Record<string, number> = {
+      ArrowRight: (index + 1) % items.length,
+      ArrowLeft: (index - 1 + items.length) % items.length,
+      Home: 0,
+      End: items.length - 1,
+    };
+    if (!(event.key in targets)) return;
     event.preventDefault();
-    const next = (index + step + items.length) % items.length;
+    const next = targets[event.key];
     setActive(items[next]);
     tabRefs.current[next]?.focus();
   }
@@ -26,7 +31,7 @@ export function Tabs({ items, children }: { items: string[]; children: ReactNode
   return (
     <TabsContext.Provider value={{ active, baseId, items }}>
       <div className="my-6 overflow-hidden rounded-lg border border-border">
-        <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-border bg-surface px-2">
+        <div role="tablist" aria-label="Setup options" className="flex gap-1 overflow-x-auto border-b border-border bg-surface px-2">
           {items.map((item, index) => {
             const selected = item === active;
             return (
@@ -43,7 +48,7 @@ export function Tabs({ items, children }: { items: string[]; children: ReactNode
                 tabIndex={selected ? 0 : -1}
                 onClick={() => setActive(item)}
                 onKeyDown={(event) => onKeyDown(event, index)}
-                className={`-mb-px border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
+                className={`-mb-px border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors focus-visible:-outline-offset-2 ${
                   selected ? "border-brand text-fg" : "border-transparent text-muted hover:text-fg"
                 }`}
               >
@@ -68,6 +73,7 @@ export function Tab({ value, children }: { value: string; children: ReactNode })
       id={`${tabs.baseId}-panel-${toId(value)}`}
       aria-labelledby={`${tabs.baseId}-tab-${toId(value)}`}
       hidden={tabs.active !== value}
+      tabIndex={0}
     >
       {children}
     </div>

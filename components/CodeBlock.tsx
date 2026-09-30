@@ -38,8 +38,8 @@ export function CodeBlock({ children }: ComponentProps<"figure">) {
   });
 
   return (
-    <figure data-code-block className="not-prose my-6 overflow-hidden rounded-lg border border-border bg-code">
-      <figcaption className="flex items-center justify-between gap-2 border-b border-border py-1 pr-1.5 pl-4">
+    <figure data-code-block className="not-prose my-6 overflow-hidden rounded-xl border border-border bg-code shadow-xs">
+      <figcaption className="flex items-center justify-between gap-2 border-b border-border bg-surface/70 py-1 pr-1.5 pl-4">
         <span className="truncate font-mono text-xs text-muted">{title ?? languageLabels[language] ?? language}</span>
         <CopyButton />
       </figcaption>

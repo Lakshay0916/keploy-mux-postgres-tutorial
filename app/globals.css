@@ -10,9 +10,14 @@
   --border: #e4e4e7;
   --surface: #fafafa;
   --code-bg: #f6f8fa;
+  --grid: rgb(0 0 0 / 0.045);
   /* Keploy-like orange. The darker shade keeps text above 4.5:1 on white and orange tints. */
   --brand: #f5904d;
   --brand-fg: #a84a12;
+  /* Focus rings use the text shade: >= 3:1 against both page backgrounds. */
+  --ring: var(--brand-fg);
+  /* Comfortable line length for running text (~70 characters). */
+  --measure: 40rem;
 }
 
 .dark {
@@ -22,6 +27,7 @@
   --border: #27272a;
   --surface: #131318;
   --code-bg: #16161c;
+  --grid: rgb(255 255 255 / 0.05);
   --brand-fg: #f5904d;
 }
 
@@ -34,8 +40,8 @@
   --color-code: var(--code-bg);
   --color-brand: var(--brand);
   --color-brand-fg: var(--brand-fg);
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 html {
@@ -51,6 +57,56 @@ body {
   background: color-mix(in srgb, var(--brand) 30%, transparent);
 }
 
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+a,
+button,
+summary {
+  transition-property: color, background-color, border-color, text-decoration-color, opacity;
+  transition-duration: 150ms;
+}
+
+/* The header's bottom border appears once the page is scrolled (set by ScrollEffects). */
+[data-scrolled] .site-header {
+  border-bottom-color: var(--border);
+}
+
+/* Theme icon: a keyframe animation, because next-themes disables transitions while switching. */
+@keyframes icon-in {
+  from {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.5);
+  }
+}
+
+:root:not(.dark) .theme-icon-sun,
+.dark .theme-icon-moon {
+  animation: icon-in 300ms ease-out;
+}
+
+/* ---------- Hero ---------- */
+
+/* Grid pattern with an orange glow, faded out towards the edges. */
+.hero-backdrop {
+  background-image:
+    radial-gradient(ellipse 60% 70% at 10% 0%, color-mix(in srgb, var(--brand) 16%, transparent), transparent 70%),
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size:
+    auto,
+    28px 28px,
+    28px 28px;
+  /* Fade every edge so the pattern never shows a hard border. */
+  mask-image:
+    linear-gradient(to right, transparent, #000 12%, #000 60%, transparent),
+    linear-gradient(to bottom, transparent, #000 15%, #000 55%, transparent);
+  mask-composite: intersect;
+}
+
 /* ---------- Article typography ---------- */
 
 .prose {
@@ -63,18 +119,48 @@ body {
   --tw-prose-th-borders: var(--border);
   --tw-prose-td-borders: var(--border);
   --tw-prose-code: var(--fg);
-  line-height: 1.75;
+  font-size: 1rem;
+  line-height: 1.7;
 }
 
-.prose a {
-  color: var(--brand-fg);
-  text-decoration-color: color-mix(in srgb, var(--brand) 45%, transparent);
-  text-underline-offset: 3px;
-  font-weight: 500;
+@media (width >= 48rem) {
+  .prose {
+    font-size: 1.0625rem;
+  }
 }
 
-.prose a:hover {
-  text-decoration-color: currentColor;
+/* Running text keeps a readable measure; code, tables and diagrams use the full column. */
+.prose > :is(p, ul, ol),
+.prose .steps > :is(p, ul, ol) {
+  max-width: var(--measure);
+}
+
+.prose :is(h2, h3) {
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+/* Sections are clearly separated; spacing inside a section stays tighter. */
+.prose h2 {
+  margin-top: 3.5rem;
+  margin-bottom: 1rem;
+  padding-top: 2.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 1.5em;
+  line-height: 1.25;
+}
+
+.prose h3 {
+  margin-top: 2.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 1.2em;
+  line-height: 1.35;
+}
+
+.prose > :is(p, ul, ol),
+.prose .steps > :is(p, ul, ol) {
+  margin-top: 1em;
+  margin-bottom: 1em;
 }
 
 /* Clear the sticky header, plus the "On this page" bar below lg. */
@@ -88,9 +174,16 @@ body {
   }
 }
 
-.prose h2 {
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--border);
+/* Components opt out with .not-prose (e.g. the hero's button keeps its own colours). */
+.prose a:not(:where(.not-prose *)) {
+  color: var(--brand-fg);
+  text-decoration-color: color-mix(in srgb, var(--brand) 45%, transparent);
+  text-underline-offset: 3px;
+  font-weight: 500;
+}
+
+.prose a:not(:where(.not-prose *)):hover {
+  text-decoration-color: currentColor;
 }
 
 .heading-anchor {
@@ -99,21 +192,24 @@ body {
   font-weight: 400;
   text-decoration: none !important;
   opacity: 0;
-  transition: opacity 150ms;
 }
 
-:is(h2, h3):hover .heading-anchor {
+:is(h2, h3):is(:hover, :focus-within) .heading-anchor {
   opacity: 1;
 }
 
-/* Inline code */
+/* Inline code: a quiet chip, no backticks. */
 .prose :not(pre) > code {
-  padding: 0.15rem 0.35rem;
+  padding: 0.12rem 0.35rem;
   border-radius: 0.3rem;
   border: 1px solid var(--border);
   background: var(--code-bg);
   font-size: 0.85em;
   font-weight: 500;
+  overflow-wrap: anywhere;
+  /* A chip that wraps onto two lines keeps its border and padding on both. */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 .prose :not(pre) > code::before,
@@ -121,17 +217,34 @@ body {
   content: none;
 }
 
+.prose kbd {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+}
+
 /* ---------- Code blocks (rehype-pretty-code, dual theme) ---------- */
 
 .prose pre {
   margin: 0;
-  padding: 1rem 0;
+  padding: 0.9rem 0;
   border-radius: 0;
   background: transparent;
   color: var(--shiki-light);
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
   line-height: 1.7;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+@media (width >= 40rem) {
+  .prose pre {
+    font-size: 0.85rem;
+  }
+}
+
+.prose pre:focus-visible {
+  outline-offset: -2px;
+  border-radius: 0 0 0.75rem 0.75rem;
 }
 
 .dark .prose pre {
@@ -152,17 +265,31 @@ pre [data-line] {
 }
 
 pre [data-highlighted-line] {
-  background: color-mix(in srgb, var(--brand) 12%, transparent);
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
   border-left-color: var(--brand);
 }
 
-/* ---------- Steps ---------- */
+/* github-light-default renders comments in #6E7781 (4.3:1 on our code background); darken to pass WCAG AA. */
+pre code span[style*="--shiki-light:#6E7781"] {
+  --shiki-light: #57606a !important;
+}
+
+/* ---------- Steps: numbered vertical timeline ---------- */
 
 .steps {
+  --dot: 1.75rem;
+  --gap: 1.1rem;
   counter-reset: step;
-  margin-left: 1rem;
-  padding-left: 1.75rem;
+  margin-left: calc(var(--dot) / 2);
+  padding-left: calc(var(--dot) / 2 + var(--gap));
   border-left: 1px solid var(--border);
+}
+
+@media (width >= 40rem) {
+  .steps {
+    --dot: 2.25rem;
+    --gap: 1.5rem;
+  }
 }
 
 .steps > h3 {
@@ -174,26 +301,129 @@ pre [data-highlighted-line] {
 .steps > h3::before {
   content: counter(step);
   position: absolute;
-  left: -2.85rem;
-  top: -0.1rem;
+  /* Centre the dot on the timeline, vertically aligned with the first line of the heading. */
+  left: calc(-1 * (var(--dot) + var(--gap)) - 0.5px);
+  top: calc(0.5lh - var(--dot) / 2);
   display: grid;
   place-items: center;
-  width: 2.2rem;
-  height: 2.2rem;
-  border: 4px solid var(--bg);
+  width: var(--dot);
+  height: var(--dot);
+  border: 3px solid var(--bg);
   border-radius: 9999px;
   background: var(--surface);
   box-shadow: 0 0 0 1px var(--border);
   color: var(--brand-fg);
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
-.prose td:first-child code {
+/* ---------- Tables ---------- */
+
+.table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.table-wrap th {
+  padding: 0.6rem 0.75rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  text-align: left;
   white-space: nowrap;
 }
 
-/* github-light-default renders comments in #6E7781 (4.3:1 on our code background); darken to pass WCAG AA. */
-pre code span[style*="--shiki-light:#6E7781"] {
-  --shiki-light: #57606a !important;
+.table-wrap td {
+  padding: 0.6rem 0.75rem;
+  vertical-align: top;
+}
+
+.table-wrap tbody tr + tr {
+  border-top: 1px solid var(--border);
+}
+
+.table-wrap tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+
+.table-wrap td:first-child code {
+  white-space: nowrap;
+}
+
+@media (width >= 40rem) {
+  .table-wrap :is(th, td) {
+    padding: 0.65rem 1rem;
+  }
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- Print ---------- */
+
+@media print {
+  /* Always print with the light palette. */
+  .dark {
+    --bg: #ffffff;
+    --fg: #18181b;
+    --muted: #52525b;
+    --border: #d4d4d8;
+    --surface: #fafafa;
+    --code-bg: #f6f8fa;
+    --brand-fg: #a84a12;
+  }
+
+  .dark pre code span,
+  .dark .prose pre {
+    color: var(--shiki-light);
+  }
+
+  .hero-backdrop,
+  .heading-anchor {
+    display: none;
+  }
+
+  .prose pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .prose a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    color: var(--muted);
+    font-size: 0.8em;
+    font-weight: 400;
+  }
+
+  figure,
+  table,
+  .callout {
+    break-inside: avoid;
+  }
+
+  .prose :is(h2, h3) {
+    break-after: avoid;
+  }
+}
+
+/* Tighter list indent inside callouts, where horizontal space is scarce. */
+.callout :is(ul, ol) {
+  padding-left: 1.15em;
 }
