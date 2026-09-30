@@ -10,7 +10,7 @@ I took Keploy's Gorilla Mux + Postgres sample, clicked around the API for a minu
 
 </Callout>
 
-{/* TODO(me): add one or two sentences on why I picked this quickstart / what I expected going in. */}
+I picked the Mux + Postgres quickstart on purpose. It's about as ordinary as a Go stack gets: a router, `database/sql` and a real SQL database. If Keploy can record Postgres at the wire level and fake it convincingly here, it should cope with most real Go services.
 
 ## What is Keploy, and why should a Go dev care?
 
@@ -83,7 +83,7 @@ It's a small product catalog API written with [Gorilla Mux](https://github.com/g
 | `model.go` | The SQL behind each handler |
 | `docker-compose.yml` | Two services: the Go app (container `muxSqlApp`) and `postgres:10.5` |
 
-Before recording, I had to make three small changes. None of them are Keploy-specific, but each one tripped me up.
+Before recording, I had to make four small changes. None of them are Keploy-specific, but each one tripped me up.
 
 **1. Point the app at the Postgres container.** In the current version of the repo, `main.go` connects to `localhost`, which is right for the native setup but wrong inside Docker, where Postgres is reachable at its service name. The comment on the next line even says so:
 
@@ -105,6 +105,24 @@ docker network create keploy-network
 ```bash
 rm -rf keploy
 ```
+
+**4. Give Postgres a free host port.** `docker-compose.yml` publishes Postgres on `5432`, the port every local Postgres install uses. On my machine it was already taken twice over: a system-wide PostgreSQL 15 install held `5432`, and another project's container held `5433`. So I moved the sample to `5434`:
+
+```diff title="docker-compose.yml"
+     ports:
+-      - '5432:5432'
++      - '5434:5432'
+```
+
+Only the left-hand (host) side changes. The Go app reaches Postgres at `postgres:5432` over the Docker network, so the app and Keploy don't notice. The new port only matters if you want to poke at the database from your host, for example `psql -h localhost -p 5434 -U postgres`. The API itself stays on `8010`, so every `curl` below works unchanged.
+
+To check whether a port is free, try to connect to it:
+
+```bash
+nc -z localhost 5432 && echo "5432 is taken"
+```
+
+I used `nc` rather than `lsof` on purpose. `lsof -i :5432` showed nothing for me, because without `sudo` it can't see processes owned by another user, like the system Postgres.
 
 <Callout type="tip">
 If you only plan to use Docker, you can skip `go mod download`. The `Dockerfile` builds the app inside a `golang` image.
@@ -137,7 +155,7 @@ Under the hood, Keploy writes a temporary Compose file that adds its own agent c
 muxSqlApp       | 2026/09/30 14:49:45 😃 Connected to 8010 port !!
 ```
 
-{/* TODO(me): note anything that surprised or confused me while waiting for this step. */}
+My very first attempt never reached that line. Compose bailed out with `listen tcp 0.0.0.0:5432: bind: address already in use`, which is why the port change in Step 2 exists. The other thing I didn't expect: Keploy runs its agent as a container (the `keploy/enterprise` image), and Docker pulls it on first use. That makes the first start noticeably slower than every one after it.
 
 ### Generate traffic
 
@@ -303,7 +321,7 @@ It's the same command as before, plus `--delay`: how many seconds to wait after 
 
 Here's the key point: **the app's SQL never reached Postgres.** Compose still starts the Postgres container, but Keploy intercepts the app's outgoing connections and answers them from `mocks.yaml`. That's why the replay is deterministic. The `INSERT` returns `id: 1` every single time, however many times you run it, which a real database would never do.
 
-{/* TODO(me): describe my "a-ha" moment from seeing this pass. */}
+The timestamps were my a-ha moment. The run reports about 11 seconds, but the log shows all three tests starting and finishing within roughly **35 milliseconds**. Almost everything else is the `--delay 10` wait for the app to boot. Once the app is up, replaying against recorded mocks costs next to nothing.
 
 ### Break it on purpose
 
@@ -405,6 +423,10 @@ sudo -E env PATH=$PATH keploy test -c "go run main.go app.go" --delay 10
 
 `sudo` is needed to load the eBPF programs. `-E env PATH=$PATH` keeps your environment, so `sudo` can still find `go` and `keploy`.
 
+<Callout type="warning">
+In native mode the app connects to Postgres through the **host** port, and `app.go` hardcodes it as `"5432"`. If you moved Postgres to `5434` in Step 2, change that string in `Initialize` to `"5434"` too.
+</Callout>
+
 </Tab>
 </Tabs>
 
@@ -412,8 +434,8 @@ sudo -E env PATH=$PATH keploy test -c "go run main.go app.go" --delay 10
 
 These are the problems I actually ran into, plus a few that are easy to hit.
 
-<Callout type="danger" title="Bind for 0.0.0.0:5432 failed: port is already allocated">
-Another Postgres (in my case, a different project's container) already owned the port. The Go app talks to Postgres over the Docker network, so the host port mapping isn't needed for this tutorial. Stop the other database, or remove or change the `ports:` entry under `postgres` in `docker-compose.yml`.
+<Callout type="danger" title="Postgres port already in use">
+You'll see `bind: address already in use` when a local process holds the port, or `port is already allocated` when another container does. Either way, something else owns that host port. For me it was a system-wide PostgreSQL 15 on `5432` and another project's container on `5433`. Map the sample's Postgres to a free port such as `5434` (Step 2), or stop the other database. The Go app talks to Postgres over the Docker network, so the host port you pick doesn't affect the tutorial.
 </Callout>
 
 <Callout type="warning" title="The old test-set-0 fails on replay">
@@ -421,7 +443,7 @@ The recordings shipped with the repo were made with an older Keploy and use an o
 </Callout>
 
 <Callout type="warning" title="My code change made no difference">
-You're replaying the old image. Run `docker compose build` before `keploy test`.
+You're running an old image. Run `docker compose build` before `keploy test`. This can catch you out even in a fresh clone: Compose names the image after the folder (`mux-sql-go-app`), so a new clone in another `mux-sql` folder reuses whatever image an earlier clone built. That happened to me, and a fresh recording came back with `"cost": 0` left over from the Step 7 experiment.
 </Callout>
 
 <Callout type="info" title="Other things worth checking">
@@ -434,7 +456,6 @@ You're replaying the old image. Run `docker compose build` before `keploy test`.
 
 </Callout>
 
-{/* TODO(me): add any errors I hit on my own run that aren't covered above. */}
 
 ## Why this matters for Go teams
 
@@ -452,4 +473,4 @@ You're replaying the old image. Run `docker compose build` before `keploy test`.
 - [keploy/keploy on GitHub](https://github.com/keploy/keploy): star it, read the source, file issues
 - [Keploy community Slack](https://join.slack.com/t/keploy/shared_invite/zt-3zcnuqfgl-WYK1NMhslVHsCtNcA1ULwA): where to ask when you get stuck
 
-{/* TODO(me): closing line in my own voice, e.g. what I'd try next with Keploy. */}
+If you try this, don't stop at the green run. Do Step 7, then fix the `defer` bug and re-record. Watching the suite fail for the right reason is what makes it worth trusting.
