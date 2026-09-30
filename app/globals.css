@@ -1,26 +1,187 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #ffffff;
+  --fg: #18181b;
+  --muted: #52525b;
+  --border: #e4e4e7;
+  --surface: #fafafa;
+  --code-bg: #f6f8fa;
+  /* Keploy-like orange. The darker shade keeps link text above 4.5:1 on white. */
+  --brand: #f5904d;
+  --brand-fg: #b4531a;
+}
+
+.dark {
+  --bg: #0b0b0f;
+  --fg: #e4e4e7;
+  --muted: #a1a1aa;
+  --border: #27272a;
+  --surface: #131318;
+  --code-bg: #16161c;
+  --brand-fg: #f5904d;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-surface: var(--surface);
+  --color-code: var(--code-bg);
+  --color-brand: var(--brand);
+  --color-brand-fg: var(--brand-fg);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand) 30%, transparent);
+}
+
+/* ---------- Article typography ---------- */
+
+.prose {
+  --tw-prose-body: var(--fg);
+  --tw-prose-headings: var(--fg);
+  --tw-prose-bold: var(--fg);
+  --tw-prose-counters: var(--muted);
+  --tw-prose-bullets: var(--muted);
+  --tw-prose-hr: var(--border);
+  --tw-prose-th-borders: var(--border);
+  --tw-prose-td-borders: var(--border);
+  --tw-prose-code: var(--fg);
+  line-height: 1.75;
+}
+
+.prose a {
+  color: var(--brand-fg);
+  text-decoration-color: color-mix(in srgb, var(--brand) 45%, transparent);
+  text-underline-offset: 3px;
+  font-weight: 500;
+}
+
+.prose a:hover {
+  text-decoration-color: currentColor;
+}
+
+.prose :is(h2, h3) {
+  scroll-margin-top: 5rem;
+}
+
+.prose h2 {
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.heading-anchor {
+  margin-left: 0.5rem;
+  color: var(--muted);
+  font-weight: 400;
+  text-decoration: none !important;
+  opacity: 0;
+  transition: opacity 150ms;
+}
+
+:is(h2, h3):hover .heading-anchor {
+  opacity: 1;
+}
+
+/* Inline code */
+.prose :not(pre) > code {
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.3rem;
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+  font-size: 0.85em;
+  font-weight: 500;
+}
+
+.prose :not(pre) > code::before,
+.prose :not(pre) > code::after {
+  content: none;
+}
+
+/* ---------- Code blocks (rehype-pretty-code, dual theme) ---------- */
+
+.prose pre {
+  margin: 0;
+  padding: 1rem 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--shiki-light);
+  font-size: 0.85rem;
+  line-height: 1.7;
+  overflow-x: auto;
+}
+
+.dark .prose pre {
+  color: var(--shiki-dark);
+}
+
+pre code span {
+  color: var(--shiki-light);
+}
+
+.dark pre code span {
+  color: var(--shiki-dark);
+}
+
+pre [data-line] {
+  padding: 0 1rem;
+  border-left: 3px solid transparent;
+}
+
+pre [data-highlighted-line] {
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+  border-left-color: var(--brand);
+}
+
+/* ---------- Steps ---------- */
+
+.steps {
+  counter-reset: step;
+  margin-left: 1rem;
+  padding-left: 1.75rem;
+  border-left: 1px solid var(--border);
+}
+
+.steps > h3 {
+  counter-increment: step;
+  position: relative;
+  border-top: 0;
+}
+
+.steps > h3::before {
+  content: counter(step);
+  position: absolute;
+  left: -2.85rem;
+  top: -0.1rem;
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 4px solid var(--bg);
+  border-radius: 9999px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+  color: var(--brand-fg);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.prose td:first-child code {
+  white-space: nowrap;
 }
