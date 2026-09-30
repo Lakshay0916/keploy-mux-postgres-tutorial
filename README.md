@@ -2,7 +2,7 @@
 
 A single-page, static documentation site with a beginner-friendly tutorial: record real traffic from a [Gorilla Mux + Postgres sample API](https://github.com/keploy/samples-go/tree/main/mux-sql) with [Keploy](https://keploy.io) and replay it as tests, with the database mocked automatically.
 
-**Live site:** _coming soon_
+**Live site:** https://keploy-mux-postgres-tutorial.vercel.app
 
 The tutorial is based on a real run of Keploy's [Mux + Postgres quickstart](https://keploy.io/docs/quickstart/samples-mux/) (Docker Compose flavour, Keploy 3.8.49). It covers the gotchas I hit along the way and a "break it on purpose" experiment that shows a failing replay.
 
