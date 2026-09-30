@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Test a Go + Postgres API with Keploy
 
-## Getting Started
+A single-page, static documentation site with a beginner-friendly tutorial: record real traffic from a [Gorilla Mux + Postgres sample API](https://github.com/keploy/samples-go/tree/main/mux-sql) with [Keploy](https://keploy.io) and replay it as tests, with the database mocked automatically.
 
-First, run the development server:
+**Live site:** _coming soon_
+
+The tutorial is based on a real run of Keploy's [Mux + Postgres quickstart](https://keploy.io/docs/quickstart/samples-mux/) (Docker Compose flavour, Keploy 3.8.49). It covers the gotchas I hit along the way and a "break it on purpose" experiment that shows a failing replay.
+
+## Run it locally
+
+Requires Node.js 20.9 or newer.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev     # http://localhost:3000
+npm run build   # production build (fully static)
+npm run lint
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tech stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- [Next.js](https://nextjs.org) (App Router) with the tutorial written in MDX via [`@next/mdx`](https://nextjs.org/docs/app/guides/mdx)
+- [Tailwind CSS](https://tailwindcss.com) + `@tailwindcss/typography`
+- [`rehype-pretty-code`](https://rehype-pretty.pages.dev) + [Shiki](https://shiki.style) for syntax highlighting (separate light and dark themes)
+- `remark-gfm`, `rehype-slug`, `rehype-autolink-headings` for tables and linkable headings
+- [`next-themes`](https://github.com/pacocoursey/next-themes) for the dark/light toggle, [`lucide-react`](https://lucide.dev) for icons
+- Deployed on [Vercel](https://vercel.com)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Project structure
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```text
+app/
+├── page.mdx              # the tutorial
+├── layout.tsx            # header, article + table of contents, footer, metadata
+├── globals.css           # theme tokens, prose, code block and step styles
+├── icon.svg              # favicon
+└── opengraph-image.tsx   # social preview image, generated at build time
+components/
+├── Callout.tsx           # info / tip / warning / danger boxes
+├── Steps.tsx             # numbered steps (built from ### headings)
+├── Tabs.tsx              # accessible tabs (Docker Compose vs native)
+├── CodeBlock.tsx         # code block header: filename or language + copy button
+├── CopyButton.tsx
+├── FlowDiagram.tsx       # record/replay diagram
+├── Toc.tsx               # "On this page" sidebar with active-section tracking
+├── Header.tsx, Footer.tsx, ThemeToggle.tsx, GitHubIcon.tsx
+lib/site.ts               # site title, description, repo URL
+mdx-components.tsx        # maps MDX elements to the components above
+next.config.mjs           # MDX + remark/rehype plugin setup
+```
